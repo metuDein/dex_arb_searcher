@@ -1,6 +1,10 @@
-require('dotenv').config()
+require('dotenv').config();
+const express = require('express');
 const { ethers } = require('ethers');
 const axios = require('axios');
+
+const app = express();
+const PORT = process.env.PORT || 3500;
 
 // Enhanced Configuration with validated addresses
 const CONFIG = {
@@ -102,7 +106,7 @@ const CONFIG = {
         botToken: process.env.TELEGRAM_BOT_TOKEN,
         chatId: process.env.TELEGRAM_CHAT_ID,
         parseMode: 'Markdown',
-        notificationCooldown: 2000 // 10 seconds between notifications
+        notificationCooldown: 2000 // 2 seconds between notifications
     },
     scanInterval: 45000 // 45 seconds
 };
@@ -319,8 +323,13 @@ class NetworkScanner {
     }
 }
 
+// Initialize Express server
+app.get('/', (req, res) => {
+    res.send('Arbitrage Bot is running!');
+});
+
 // Initialize and run the bot
-(async () => {
+const startBot = async () => {
     try {
         console.log('Starting multi-chain arbitrage scanner...');
         const detector = new DexArbitrageDetector();
@@ -334,216 +343,10 @@ class NetworkScanner {
         console.error('Failed to initialize bot:', error);
         process.exit(1);
     }
-})();
+};
 
-// require('dotenv').config()
-// const { ethers } = require('ethers');
-// const axios = require('axios');
-
-// // Configuration
-// const CONFIG = {
-//     networks: {
-//         ethereum: {
-//             rpc: `https://mainnet.infura.io/v3/${process.env.INFURA_KEY}`,
-//             dexes: {
-//                 uniswapV2: '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D', // Uniswap V2 Router
-//                 sushiswap: '0xd9e1cE17f2641f24aE83637ab66a2cca9C378B9F'  // Sushiswap Router (V2)
-//             }
-//         }
-//     },
-//     tokenPairs: [
-//         { base: 'WETH', quote: 'USDC', amount: 1 },
-//         { base: 'WBTC', quote: 'USDT', amount: 0.01 }
-//     ],
-//     threshold: 0.5, // Minimum profit percentage to alert
-//     telegram: {
-//         botToken: process.env.TELEGRAM_BOT_TOKEN,
-//         chatId: process.env.TELEGRAM_CHAT_ID,
-//         parseMode: 'Markdown',
-//         notificationCooldown: 30000 // 30 seconds between notifications
-//     }
-// };
-
-// // Uniswap V2 Router ABI (simplified - only getAmountsOut needed)
-// const UNISWAP_V2_ROUTER_ABI = [
-//     "function getAmountsOut(uint amountIn, address[] calldata path) external view returns (uint[] memory amounts)"
-// ];
-
-// // Both Uniswap V2 and Sushiswap use the same ABI for this function
-// const DEX_ABIS = {
-//     uniswapV2: UNISWAP_V2_ROUTER_ABI,
-//     sushiswap: UNISWAP_V2_ROUTER_ABI
-// };
-
-// class TelegramNotifier {
-//     constructor() {
-//         this.baseUrl = `https://api.telegram.org/bot${CONFIG.telegram.botToken}`;
-//         this.lastNotificationTime = 0;
-//     }
-
-//     async sendNotification(message) {
-//         const now = Date.now();
-//         if (now - this.lastNotificationTime < CONFIG.telegram.notificationCooldown) {
-//             console.log('Skipping notification due to cooldown');
-//             return;
-//         }
-
-//         this.lastNotificationTime = now;
-
-//         try {
-//             await axios.post(`${this.baseUrl}/sendMessage`, {
-//                 chat_id: CONFIG.telegram.chatId,
-//                 text: message,
-//                 parse_mode: CONFIG.telegram.parseMode
-//             });
-//             console.log('Telegram notification sent successfully');
-//         } catch (error) {
-//             console.error('Failed to send Telegram notification:', error.response?.data || error.message);
-//         }
-//     }
-
-//     formatOpportunityMessage(opportunity) {
-//         return `🚀 *Arbitrage Opportunity Detected* 🚀
-
-// *Pair:* ${opportunity.pair}
-// *Buy At:* ${opportunity.buyAt.dex} (${opportunity.buyAt.price})
-// *Sell At:* ${opportunity.sellAt.dex} (${opportunity.sellAt.price})
-// *Profit Spread:* ${opportunity.spread}
-
-// ⏱ _${new Date().toLocaleTimeString()}_`;
-//     }
-// }
-
-// class DexArbitrageDetector {
-//     constructor(network = 'ethereum') {
-//         this.network = network;
-//         this.provider = new ethers.JsonRpcProvider(CONFIG.networks[network].rpc);
-//         this.dexes = CONFIG.networks[network].dexes;
-//         this.tokenCache = new Map();
-//         this.notifier = new TelegramNotifier();
-//     }
-
-//     async initialize() {
-//         await this._loadTokenData();
-//     }
-
-//     async _loadTokenData() {
-//         const commonTokens = {
-//             WETH: { address: '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2', decimals: 18 },
-//             USDC: { address: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 },
-//             WBTC: { address: '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599', decimals: 8 },
-//             USDT: { address: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 }
-//         };
-
-//         for (const [symbol, data] of Object.entries(commonTokens)) {
-//             this.tokenCache.set(symbol, data);
-//         }
-//     }
-
-//     async getPrice(dex, baseToken, quoteToken, amount) {
-//         try {
-//             const router = new ethers.Contract(
-//                 this.dexes[dex],
-//                 DEX_ABIS[dex],
-//                 this.provider
-//             );
-
-//             // Convert amount to proper units with decimals
-//             const amountIn = ethers.parseUnits(amount.toString(), baseToken.decimals);
-
-//             const path = [baseToken.address, quoteToken.address];
-
-//             // Call getAmountsOut
-//             const amounts = await router.getAmountsOut(amountIn, path);
-
-//             if (!amounts || amounts.length < 2) {
-//                 console.error(`Invalid response from ${dex}`);
-//                 return null;
-//             }
-
-//             // Convert output amount to proper units
-//             const amountOut = ethers.formatUnits(amounts[1], quoteToken.decimals);
-//             const price = parseFloat(amountOut) / amount; // Price per token
-
-//             return {
-//                 price: price,
-//                 dex: dex
-//             };
-//         } catch (error) {
-//             console.error(`Error getting price from ${dex}:`, error.message);
-//             return null;
-//         }
-//     }
-
-//     async scanAndNotify() {
-//         try {
-//             const opportunities = [];
-
-//             for (const pair of CONFIG.tokenPairs) {
-//                 const baseToken = this.tokenCache.get(pair.base);
-//                 const quoteToken = this.tokenCache.get(pair.quote);
-
-//                 if (!baseToken || !quoteToken) {
-//                     console.warn(`Missing token data for ${pair.base}/${pair.quote}`);
-//                     continue;
-//                 }
-
-//                 const prices = [];
-
-//                 // Get prices from all DEXes
-//                 for (const dexName of Object.keys(this.dexes)) {
-//                     const price = await this.getPrice(dexName, baseToken, quoteToken, pair.amount);
-//                     if (price) {
-//                         console.log(`Got price from ${dexName}: ${price.price}`);
-//                         prices.push(price);
-//                     }
-//                 }
-
-//                 // Find arbitrage if we have at least 2 prices
-//                 if (prices.length >= 2) {
-//                     prices.sort((a, b) => a.price - b.price);
-//                     const lowest = prices[0];
-//                     const highest = prices[prices.length - 1];
-//                     const spread = ((highest.price - lowest.price) / lowest.price) * 100;
-
-//                     if (spread >= CONFIG.threshold) {
-//                         const opportunity = {
-//                             pair: `${pair.base}/${pair.quote}`,
-//                             buyAt: { dex: lowest.dex, price: lowest.price.toFixed(6) },
-//                             sellAt: { dex: highest.dex, price: highest.price.toFixed(6) },
-//                             spread: spread.toFixed(2) + '%'
-//                         };
-//                         opportunities.push(opportunity);
-//                     }
-//                 }
-//             }
-
-//             if (opportunities.length > 0) {
-//                 console.log('Found arbitrage opportunities:', opportunities);
-//                 for (const opportunity of opportunities) {
-//                     await this.notifier.sendNotification(
-//                         this.notifier.formatOpportunityMessage(opportunity)
-//                     );
-//                 }
-//             } else {
-//                 console.log('No arbitrage opportunities found');
-//             }
-//         } catch (error) {
-//             console.error('Error during scan:', error);
-//         }
-//     }
-// }
-
-// // Initialize and run the bot
-// (async () => {
-//     try {
-//         const detector = new DexArbitrageDetector('ethereum');
-//         await detector.initialize();
-
-//         console.log('Starting arbitrage scanner with Telegram notifications...');
-//         setInterval(() => detector.scanAndNotify(), 10000); // Scan every 10 seconds
-//     } catch (error) {
-//         console.error('Failed to initialize bot:', error);
-//         process.exit(1);
-//     }
-// })();
+// Start the server and bot
+app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    startBot();
+});
